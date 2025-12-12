@@ -1,0 +1,72 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/@prisma/shipment-pg-client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("SHIPMENT_DATABASE_URL_PG")
+}
+
+model Shipment {
+  id              String   @id @default(uuid())
+  code            String   @unique
+  customerId      String
+  transportTypeId Int
+  businessTypeId  Int
+  loadingMethodId Int?
+  blNumber        String?
+  consignee       String?
+  notifyParty     String?
+  polId           String?
+  podId           String?
+  incotermId      Int?
+  vesselVoyage    String?
+  etd             BigInt?
+  eta             BigInt?
+  ata             BigInt?
+  status          String   @default("draft")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  commodities     ShipmentCommodity[]
+  attachments     ShipmentAttachment[]
+
+  @@index([customerId])
+  @@index([code])
+  @@index([status])
+  @@index([transportTypeId])
+  @@index([businessTypeId])
+  @@index([polId])
+  @@index([podId])
+  @@index([createdAt])
+}
+
+model ShipmentCommodity {
+  id          String   @id @default(uuid())
+  shipmentId  String
+  commodity   String
+  hsCode      String?
+  sequence    Int      @default(0)
+  createdAt   DateTime @default(now())
+  shipment    Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+
+  @@index([shipmentId])
+  @@index([sequence])
+}
+
+model ShipmentAttachment {
+  id          String   @id @default(uuid())
+  shipmentId  String
+  fileName    String
+  fileUrl     String
+  fileSize    Int
+  uploadedAt  DateTime @default(now())
+  shipment    Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+
+  @@index([shipmentId])
+}
+
+model ShipmentCodeSequence {
+  dateKey String @id
+  seq     Int    @default(0)
+}

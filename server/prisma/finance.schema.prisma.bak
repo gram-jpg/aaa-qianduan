@@ -1,0 +1,97 @@
+// Finance Database Schema
+// Stores costs, invoices, and payments
+// Separated for security and audit compliance
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/@prisma/finance-client"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("FINANCE_DATABASE_URL")
+}
+
+model ShipmentCost {
+  id          String   @id @default(uuid())
+  shipmentId  String   // Reference to Shipment ID in Business DB (Loose Coupling)
+  description String
+  amount      Float
+  currency    String   @default("THB")
+  
+  // AR/AP Fields
+  type               String   // 'AR' or 'AP'
+  financialSubjectId Int
+  settlementUnitType String   // 'customer' or 'supplier'
+  settlementUnitId   String
+  vatRate            Decimal  @default(7.0)
+  whtRate            Decimal  @default(3.0)
+  remarks            String?
+
+  // Application Fields
+  applicationNumber  String?   // e.g., F250101001
+  applicationDate    DateTime? // Date when application was created
+  dueDate            DateTime? // Latest payment/collection date
+  applicationRemarks String?   // Remarks for application
+  
+  // Status Management
+  status      String   @default("unapplied") // unapplied | applied | settled | canceled
+  invoiceId   String?  // Optional link to Invoice
+  
+  // Settlement Fields
+  settlementDate     DateTime? // Date when settled
+  settlementRemarks  String?   // Remarks for settlement
+  
+  // Auditing
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([shipmentId])
+  @@index([status])
+  @@index([applicationNumber])
+  @@index([type])
+  @@index([financialSubjectId])
+}
+
+model Invoice {
+  id          String   @id @default(uuid())
+  number      String   @unique
+  shipmentId  String
+  type        String   // 'AR' (Receivable) or 'AP' (Payable)
+  totalAmount Float
+  currency    String
+  status      String   @default("draft") // draft, issued, paid, void
+  
+  issueDate   DateTime
+  dueDate     DateTime?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([shipmentId])
+  @@index([number])
+}
+
+model ExpenseApplication {
+  id                String   @id @default(uuid())
+  applicationNumber String   @unique // e.g., F250101001
+  type              String   // 'AR' or 'AP'
+  totalAmount       Float    // Total amount of costs in this application
+  currency          String   // Currency (from first cost if mixed)
+  costCount         Int      // Number of costs in this application
+  dueDate           DateTime? // Latest payment/collection date
+  remarks           String?  // Application remarks
+  status            String   @default("active") // active | canceled
+  
+  // Auditing
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  canceledAt  DateTime? // Date when application was canceled
+  
+  @@index([applicationNumber])
+  @@index([type])
+  @@index([status])
+  @@index([createdAt])
+}

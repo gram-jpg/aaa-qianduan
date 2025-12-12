@@ -1,0 +1,46 @@
+// Log Database Schema
+// Stores system logs and user audit trails
+// Separated for immutable audit tral
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/@prisma/log-client"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("LOG_DATABASE_URL")
+}
+
+model SystemLog {
+  id          String   @id @default(uuid())
+  level       String   // INFO, WARN, ERROR, FATAL
+  module      String   // 'auth', 'shipment', 'finance', 'system'
+  message     String
+  metadata    String?  // JSON string
+  
+  timestamp   DateTime @default(now())
+
+  @@index([level])
+  @@index([module])
+  @@index([timestamp])
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  userId      String?
+  action      String   // CREATE, UPDATE, DELETE, VIEW
+  resource    String   // 'Shipment', 'Invoice', 'User'
+  resourceId  String?
+  details     String?  // JSON of what changed
+  
+  ipAddress   String?
+  userAgent   String?
+  
+  timestamp   DateTime @default(now())
+
+  @@index([userId])
+  @@index([resource])
+  @@index([action])
+  @@index([timestamp])
+}

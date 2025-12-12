@@ -1,0 +1,176 @@
+import { Router } from 'express';
+import { mainDb } from '../db';
+import { portSchema, portUpdateSchema } from '../schemas/port.schema';
+import { validate } from '../middleware/validate';
+
+const router = Router();
+
+// GET /api/settings/ports - Get all ports
+router.get('/', async (req, res) => {
+    try {
+        const { active } = req.query;
+
+        const ports = await mainDb.port.findMany({
+            where: active === 'true' ? { isActive: true } : undefined,
+            orderBy: [
+                { country: 'asc' },
+                { code: 'asc' }
+            ]
+        });
+
+        res.json(ports);
+    } catch (error) {
+        console.error('GET /ports error:', error);
+        res.status(500).json({ error: 'Failed to fetch ports' });
+    }
+});
+
+// GET /api/settings/ports/search - Search ports
+router.get('/search', async (req, res) => {
+    try {
+        const { q } = req.query;
+
+        if (!q || typeof q !== 'string') {
+            return res.status(400).json({ error: 'Search query is required' });
+        }
+
+        const searchTerm = q.trim();
+
+        const ports = await mainDb.port.findMany({
+            where: {
+                AND: [
+                    { isActive: true },
+                    {
+                        OR: [
+                            { code: { contains: searchTerm.toUpperCase() } },
+                            { nameEn: { contains: searchTerm, mode: 'insensitive' } },
+                            { nameCn: { contains: searchTerm } },
+                            { country: { contains: searchTerm.toUpperCase() } },
+                            { countryName: { contains: searchTerm, mode: 'insensitive' } }
+                        ]
+                    }
+                ]
+            },
+            orderBy: [
+                { code: 'asc' }
+            ],
+            take: 50  // Limit results
+        });
+
+        res.json(ports);
+    } catch (error) {
+        console.error('GET /ports/search error:', error);
+        res.status(500).json({ error: 'Failed to search ports' });
+    }
+});
+
+// GET /api/settings/ports/:id - Get single port
+router.get('/:id', async (req, res) => {
+    try {
+        const port = await mainDb.port.findUnique({
+            where: { id: req.params.id }
+        });
+
+        if (!port) {
+            return res.status(404).json({ error: 'Port not found' });
+        }
+
+        res.json(port);
+    } catch (error) {
+        console.error('GET /ports/:id error:', error);
+        res.status(500).json({ error: 'Failed to fetch port' });
+    }
+});
+
+// POST /api/settings/ports - Create port
+router.post('/', validate(portSchema), async (req, res) => {
+    try {
+        const data = req.body;
+
+        // Check for duplicate code
+        const existing = await mainDb.port.findUnique({
+            where: { code: data.code }
+        });
+
+        if (existing) {
+            return res.status(400).json({
+                error: `Port code "${data.code}" already exists`
+            });
+        }
+
+        const port = await mainDb.port.create({
+            data: data
+        });
+
+        res.status(201).json(port);
+    } catch (error) {
+        console.error('POST /ports error:', error);
+        res.status(500).json({ error: 'Failed to create port' });
+    }
+});
+
+// PUT /api/settings/ports/:id - Update port
+router.put('/:id', validate(portUpdateSchema), async (req, res) => {
+    try {
+        const { id, ...data } = req.body;
+
+        // Check for duplicate code (excluding current record)
+        if (data.code) {
+            const existing = await mainDb.port.findFirst({
+                where: {
+                    code: data.code,
+                    id: { not: req.params.id }
+                }
+            });
+
+            if (existing) {
+                return res.status(400).json({
+                    error: `Port code "${data.code}" already exists`
+                });
+            }
+        }
+
+        const port = await mainDb.port.update({
+            where: { id: req.params.id },
+            data: data
+        });
+
+        res.json(port);
+    } catch (error) {
+        console.error('PUT /ports/:id error:', error);
+        res.status(500).json({ error: 'Failed to update port' });
+    }
+});
+
+// DELETE /api/settings/ports/:id - Delete port
+router.delete('/:id', async (req, res) => {
+    try {
+        // Check if port is in use
+        const shipmentsUsingPort = await prisma.shipment.count({
+            where: {
+                OR: [
+                    { polId: req.params.id },
+                    { podId: req.params.id }
+                ]
+            }
+        });
+
+        if (shipmentsUsingPort > 0) {
+            return res.status(400).json({
+                error: `Cannot delete port. It is used in ${shipmentsUsingPort} shipment(s).`,
+                suggestion: 'Consider deactivating the port instead.'
+            });
+        }
+
+        await mainDb.port.delete({
+            where: { id: req.params.id }
+        });
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('DELETE /ports/:id error:', error);
+        res.status(500).json({ error: 'Failed to delete port' });
+    }
+});
+
+export { router as portRouter };

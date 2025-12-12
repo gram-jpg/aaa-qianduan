@@ -1,0 +1,39 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/@prisma/log-pg-client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("LOG_DATABASE_URL_PG")
+}
+
+model SystemLog {
+  id        String   @id @default(uuid())
+  level     String
+  module    String
+  message   String
+  metadata  String?
+  timestamp DateTime @default(now())
+
+  @@index([level])
+  @@index([module])
+  @@index([timestamp])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  action     String
+  resource   String
+  resourceId String?
+  details    String?
+  ipAddress  String?
+  userAgent  String?
+  timestamp  DateTime @default(now())
+
+  @@index([userId])
+  @@index([resource])
+  @@index([action])
+  @@index([timestamp])
+}

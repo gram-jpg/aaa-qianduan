@@ -1,0 +1,81 @@
+// Separate Prisma schema for attachments database
+datasource db {
+  provider = "sqlite"
+  url      = env("ATTACHMENTS_DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/@prisma/attachments-client"
+}
+
+model Attachment {
+  id              String   @id @default(uuid())
+  
+  // 关联信息
+  businessCode    String   // RSL-251207-001
+  customerId      String
+  customerName    String   // 冗余存储，便于查询
+  
+  // 文件信息
+  fileName        String   // 存储的文件名（带UUID）
+  originalName    String   // 原始文件名
+  fileSize        Int      // 字节
+  mimeType        String   // 文件类型
+  fileHash        String   // MD5/SHA256，用于去重
+  
+  // 存储位置
+  storageType     String   // 'hot' | 'cold'
+  storagePath     String   // 热存储：本地路径，冷存储：API URL
+  storageServer   String?  // 冷服务器地址
+  
+  // 分类和组织
+  category        String?  // 'contract', 'invoice', 'bill_of_lading', 'packing_list', 'other'
+  billOfLading    String?  // 提单号（如果适用）
+  
+  // 时间戳
+  uploadedAt      DateTime @default(now())
+  uploadedBy      String?  // 上传用户
+  archivedAt      DateTime? // 归档到冷存储的时间
+  lastAccessedAt  DateTime? // 最后访问时间
+  
+  // 元数据
+  description     String?
+  tags            String?  // JSON 数组字符串
+  
+  @@index([businessCode])
+  @@index([customerId])
+  @@index([billOfLading])
+  @@index([storageType])
+  @@index([uploadedAt])
+  @@index([fileHash])
+}
+
+model AttachmentAccessLog {
+  id            String   @id @default(uuid())
+  attachmentId  String
+  accessedAt    DateTime @default(now())
+  accessedBy    String?
+  accessType    String   // 'view', 'download'
+  ipAddress     String?
+  
+  @@index([attachmentId])
+  @@index([accessedAt])
+}
+
+model ColdStorageMigration {
+  id              String   @id @default(uuid())
+  batchId         String   @unique
+  attachmentCount Int
+  totalSize       Int      // 总大小（字节）
+  startDate       DateTime // 迁移数据的起始日期
+  endDate         DateTime // 迁移数据的结束日期
+  migratedAt      DateTime @default(now())
+  migratedBy      String
+  status          String   // 'pending', 'in_progress', 'completed', 'failed'
+  errorMessage    String?
+  
+  @@index([batchId])
+  @@index([migratedAt])
+  @@index([status])
+}
